@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container" style="max-width: 36rem">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="client.profileTitle">الحساب</h1>
+  </header>
+
+  <div class="card mb-4" style="display:flex;align-items:center;gap:1rem" id="user-card">
+    <div class="skeleton skeleton-circle" style="width:3.5rem;height:3.5rem"></div>
+    <div class="flex-1">
+      <div class="skeleton skeleton-line short"></div>
+    </div>
+  </div>
+
+  <button class="btn btn-secondary btn-block" onclick="signOut()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    <span data-i18n="auth.signOut">تسجيل الخروج</span>
+  </button>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  (async () => {
+    const me = await requireAuth("client");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderClientNav("/client/profile");
+    document.getElementById("user-card").innerHTML = `
+      ${avatarHtml(me.full_name, "lg")}
+      <div class="flex-1" style="min-width:0">
+        <strong style="display:block;font-size:1.0625rem">${me.full_name}</strong>
+        <span class="muted text-sm" dir="ltr">${me.email}</span><br>
+        <span class="muted text-xs">${t("client.memberSince")} ${formatDate(me.created_at)}</span>
+      </div>
+    `;
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orders · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="pharmacy.ordersTitle">الطلبات</h1>
+  </header>
+
+  <div class="chips mb-6">
+    <button class="chip active" data-filter="all" data-i18n="pharmacy.filterAll">الكل</button>
+    <button class="chip" data-filter="active" data-i18n="pharmacy.filterActive">نشطة</button>
+    <button class="chip" data-filter="done" data-i18n="pharmacy.filterDone">مكتملة</button>
+  </div>
+
+  <div id="list"><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div></div>
+
+  <div id="empty" class="empty hidden">
+    <div class="empty-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    </div>
+    <h3 data-i18n="pharmacy.noOrdersYet">ما في طلبات بعد — رح تظهر هون.</h3>
+  </div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script src="/sounds.js"></script>
+<script>
+  applyLang(currentLang);
+  let allOrders = [];
+  let currentFilter = "all";
+  let lastJson = "";
+  let knownOrderIds = null;
+  let knownStatusByOrderId = new Map();
+  let knownUnreadByOrderId = new Map();
+
+  const ACTIVE = ["pending", "quoted", "confirmed", "preparing", "ready_for_pickup", "out_for_delivery"];
+  const DONE = ["completed", "cancelled", "rejected"];
+
+  function detectChangesAndChime(orders) {
+    if (!knownOrderIds) return;
+    let chatChimed = false;
+    let statusChimed = false;
+    for (const o of orders) {
+      // Chat sound: unread went up
+      const prevUnread = knownUnreadByOrderId.get(o.id) ?? 0;
+      if (!chatChimed && (o.unread_count || 0) > prevUnread) {
+        playChatSound();
+        chatChimed = true;
+      }
+      // Notification sound: new order or status changed
+      const wasKnown = knownOrderIds.has(o.id);
+      const prevStatus = knownStatusByOrderId.get(o.id);
+      if (!statusChimed && (!wasKnown || (prevStatus && prevStatus !== o.status))) {
+        playNotificationSound();
+        statusChimed = true;
+      }
+    }
+  }
+  function rememberState(orders) {
+    knownOrderIds = new Set(orders.map((o) => o.id));
+    knownStatusByOrderId = new Map(orders.map((o) => [o.id, o.status]));
+    knownUnreadByOrderId = new Map(orders.map((o) => [o.id, o.unread_count || 0]));
+  }
+
+  async function refresh() {
+    try {
+      const fresh = await api("/api/orders");
+      const json = JSON.stringify(fresh);
+      if (json === lastJson) return;
+      lastJson = json;
+      detectChangesAndChime(fresh);
+      rememberState(fresh);
+      allOrders = fresh;
+      apply();
+    } catch {}
+  }
+
+  (async () => {
+    const me = await requireAuth("pharmacy");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderPharmacyNav("/pharmacy/orders");
+    document.getElementById("list").innerHTML = skeletonRows(4);
+    try {
+      allOrders = await api("/api/orders");
+      lastJson = JSON.stringify(allOrders);
+      rememberState(allOrders);
+      apply();
+      startPolling(refresh, 6000);
+    } catch (err) { toast(err.message, "error"); }
+  })();
+
+  function apply() {
+    const filtered = allOrders.filter((o) => {
+      if (currentFilter === "active") return ACTIVE.includes(o.status);
+      if (currentFilter === "done") return DONE.includes(o.status);
+      return true;
+    });
+    const list = document.getElementById("list");
+    if (filtered.length === 0) {
+      list.innerHTML = "";
+      document.getElementById("empty").classList.remove("hidden");
+      return;
+    }
+    document.getElementById("empty").classList.add("hidden");
+    list.innerHTML = filtered.map((o) => {
+      const unread = o.unread_count || 0;
+      return `
+      <a href="/pharmacy/order-detail?id=${o.id}" class="order-row">
+        ${avatarHtml(o.client_name || "•", "md")}
+        <div class="order-row-info">
+          <h3>${o.client_name}</h3>
+          <p>${formatRelative(o.created_at)} · ${o.fulfillment === "delivery" ? t("client.delivery") : t("client.pickup")}</p>
+        </div>
+        <div class="order-row-meta">
+          <div class="flex items-center gap-2" style="justify-content:flex-end">
+            ${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ""}
+            ${statusPill(o.status)}
+          </div>
+          ${o.total_jod != null ? `<div class="total mt-1">${o.total_jod} ${t("common.jod")}</div>` : ""}
+        </div>
+      </a>
+    `;
+    }).join("");
+  }
+
+  document.querySelectorAll(".chip[data-filter]").forEach((c) => {
+    c.addEventListener("click", () => {
+      document.querySelectorAll(".chip[data-filter]").forEach((x) => x.classList.remove("active"));
+      c.classList.add("active");
+      currentFilter = c.dataset.filter;
+      apply();
+    });
+  });
+</script>
+</body>
+</html>

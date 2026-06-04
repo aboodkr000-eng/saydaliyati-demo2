@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    #profile-map { height: 280px; }
+    .form-section {
+      padding: 1.25rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+    }
+    .form-section h3 {
+      margin: 0 0 1rem;
+      font-size: 1rem; font-weight: 700;
+    }
+    .row-2 { display: grid; gap: 0.875rem; }
+    @media (min-width: 540px) { .row-2 { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container" style="max-width: 44rem">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="pharmacy.profileTitle">إعدادات الصيدلية</h1>
+    <p class="page-subtitle" data-i18n="pharmacy.profileSub">عدّل معلومات صيدليتك. هاد اللي بشوفه المرضى.</p>
+  </header>
+
+  <form id="form" class="stack-md">
+    <!-- Basic info -->
+    <div class="form-section">
+      <h3 data-i18n="auth.pharmacyDetails">معلومات الصيدلية</h3>
+      <div class="row-2">
+        <div class="field">
+          <label class="label" data-i18n="auth.pharmacyName">الاسم بالإنجليزي</label>
+          <input class="input" name="name_en" required />
+        </div>
+        <div class="field">
+          <label class="label" data-i18n="auth.pharmacyNameAr">الاسم بالعربي</label>
+          <input class="input" name="name_ar" required />
+        </div>
+      </div>
+      <div class="field mt-4">
+        <label class="label" data-i18n="auth.area">المنطقة</label>
+        <input class="input" name="area" />
+      </div>
+      <div class="field mt-4">
+        <label class="label" data-i18n="auth.phone">الهاتف</label>
+        <div class="input-phone">
+          <span class="input-phone-prefix">🇯🇴 +962</span>
+          <input class="input" name="phone" type="tel" dir="ltr" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div class="form-section">
+      <h3 data-i18n="auth.pinLocation">📍 موقع الصيدلية</h3>
+      <p class="muted text-sm mb-4" data-i18n="auth.pinHint">اسحب الدبّوس بالضبط لباب الصيدلية.</p>
+      <div class="gmap-container" id="profile-map"></div>
+      <button type="button" class="btn btn-secondary btn-sm mt-4" id="locate-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+        <span data-i18n="auth.useMyLocation">استخدم موقعي الحالي</span>
+      </button>
+      <input type="hidden" name="latitude" />
+      <input type="hidden" name="longitude" />
+    </div>
+
+    <!-- Hours -->
+    <div class="form-section">
+      <h3 data-i18n="pharmacy.hours">ساعات العمل</h3>
+      <div class="switch" id="h24-switch">
+        <div class="switch-text">
+          <div class="switch-label-text" data-i18n="pharmacy.hours24">مفتوحة ٢٤ ساعة</div>
+        </div>
+        <div class="switch-track"></div>
+      </div>
+      <input type="hidden" name="is_24_hours" value="0" />
+      <div class="row-2 mt-4" id="hours-fields">
+        <div class="field">
+          <label class="label" data-i18n="pharmacy.opensAt">تفتح الساعة</label>
+          <input class="input" name="opens_at" type="time" dir="ltr" />
+        </div>
+        <div class="field">
+          <label class="label" data-i18n="pharmacy.closesAt">تسكّر الساعة</label>
+          <input class="input" name="closes_at" type="time" dir="ltr" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Delivery -->
+    <div class="form-section">
+      <div class="switch" id="delivery-switch">
+        <div class="switch-text">
+          <div class="switch-label-text" data-i18n="pharmacy.offerDelivery">خدمة التوصيل</div>
+        </div>
+        <div class="switch-track"></div>
+      </div>
+      <input type="hidden" name="delivery_available" value="0" />
+      <div class="row-2 mt-4" id="delivery-fields">
+        <div class="field">
+          <label class="label" data-i18n="pharmacy.deliveryFee">رسوم التوصيل (د.أ)</label>
+          <input class="input" name="delivery_fee_jod" type="number" step="0.5" min="0" dir="ltr" />
+        </div>
+        <div class="field">
+          <label class="label" data-i18n="pharmacy.deliveryRadius">نطاق التوصيل (كم)</label>
+          <input class="input" name="delivery_radius_km" type="number" min="0" dir="ltr" />
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg btn-block" id="submit-btn">
+      <span data-i18n="common.save">حفظ</span>
+    </button>
+  </form>
+
+  <button class="btn btn-secondary btn-block mt-6" onclick="signOut()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    <span data-i18n="auth.signOut">تسجيل الخروج</span>
+  </button>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+<script src="/maps.js"></script>
+<script>
+  applyLang(currentLang);
+  let pharmacy, mapHandle;
+
+  function setLatLng(lat, lng) {
+    document.querySelector('input[name="latitude"]').value = lat;
+    document.querySelector('input[name="longitude"]').value = lng;
+  }
+  function toggleSwitch(el, hiddenName, onChange) {
+    const onState = () => {
+      const isOn = el.classList.contains("on");
+      document.querySelector(`input[name="${hiddenName}"]`).value = isOn ? "1" : "0";
+      onChange(isOn);
+    };
+    el.addEventListener("click", () => {
+      el.classList.toggle("on");
+      onState();
+    });
+    return (forceOn) => {
+      el.classList.toggle("on", forceOn);
+      onState();
+    };
+  }
+
+  (async () => {
+    const me = await requireAuth("pharmacy");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderPharmacyNav("/pharmacy/profile");
+
+    try {
+      pharmacy = await api("/api/pharmacies/owner/mine");
+      // Fill form
+      const form = document.getElementById("form");
+      form.elements.name_en.value = pharmacy.name_en || "";
+      form.elements.name_ar.value = pharmacy.name_ar || "";
+      form.elements.area.value = pharmacy.area || "";
+      form.elements.phone.value = pharmacy.phone || "";
+      form.elements.opens_at.value = pharmacy.opens_at || "";
+      form.elements.closes_at.value = pharmacy.closes_at || "";
+      form.elements.delivery_fee_jod.value = pharmacy.delivery_fee_jod ?? "";
+      form.elements.delivery_radius_km.value = pharmacy.delivery_radius_km ?? "";
+
+      const set24 = toggleSwitch(document.getElementById("h24-switch"), "is_24_hours", (on) => {
+        document.getElementById("hours-fields").classList.toggle("hidden", on);
+      });
+      const setDelivery = toggleSwitch(document.getElementById("delivery-switch"), "delivery_available", (on) => {
+        document.getElementById("delivery-fields").classList.toggle("hidden", !on);
+      });
+      set24(!!pharmacy.is_24_hours);
+      setDelivery(!!pharmacy.delivery_available);
+
+      // Map
+      const lat = pharmacy.latitude || 31.9539;
+      const lng = pharmacy.longitude || 35.9106;
+      mapHandle = await createDraggableMap({
+        container: document.getElementById("profile-map"),
+        lat, lng, zoom: pharmacy.latitude ? 16 : 12,
+        lang: currentLang,
+      });
+      if (mapHandle.ok) {
+        setLatLng(lat, lng);
+        mapHandle.marker.addListener("dragend", () => {
+          const p = mapHandle.marker.getPosition();
+          setLatLng(p.lat(), p.lng());
+        });
+        mapHandle.map.addListener("click", (e) => {
+          mapHandle.marker.setPosition(e.latLng);
+          setLatLng(e.latLng.lat(), e.latLng.lng());
+        });
+      }
+    } catch (err) { toast(err.message, "error"); }
+  })();
+
+  document.getElementById("locate-btn").addEventListener("click", () => {
+    if (!navigator.geolocation) return toast("Geolocation not supported", "error");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        if (mapHandle?.ok) mapHandle.setLocation(lat, lng);
+        setLatLng(lat, lng);
+        toast(t("auth.locationFound"), "success");
+      },
+      () => toast(t("auth.locationDenied"), "error"),
+      { timeout: 8000 }
+    );
+  });
+
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    data.is_24_hours = data.is_24_hours === "1" ? 1 : 0;
+    data.delivery_available = data.delivery_available === "1" ? 1 : 0;
+    if (data.latitude) data.latitude = parseFloat(data.latitude);
+    if (data.longitude) data.longitude = parseFloat(data.longitude);
+    if (data.delivery_fee_jod) data.delivery_fee_jod = parseFloat(data.delivery_fee_jod);
+    if (data.delivery_radius_km) data.delivery_radius_km = parseFloat(data.delivery_radius_km);
+    const btn = document.getElementById("submit-btn");
+    btn.disabled = true;
+    btn.querySelector("span").textContent = t("common.saving");
+    try {
+      await api(`/api/pharmacies/${pharmacy.id}`, { method: "PATCH", body: data });
+      toast(t("common.saved"), "success");
+    } catch (err) {
+      toast(err.message, "error");
+    }
+    btn.disabled = false;
+    btn.querySelector("span").textContent = t("common.save");
+  });
+</script>
+</body>
+</html>

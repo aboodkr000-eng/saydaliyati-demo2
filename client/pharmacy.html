@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pharmacy · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .ph-hero {
+      background: var(--bg-2);
+      background-image: var(--grad-hero);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 1.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .ph-hero-row {
+      display: flex; align-items: flex-start; gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .ph-hero h1 {
+      margin: 0 0 0.375rem;
+      font-size: 1.625rem; font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+    .ph-hero .ph-area {
+      color: var(--fg-muted);
+      display: flex; align-items: center; gap: 0.375rem;
+      font-size: 0.875rem;
+    }
+    .ph-hero-stats {
+      display: flex; flex-wrap: wrap; gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .info-card { padding: 0; }
+    .info-row {
+      display: flex; align-items: center; gap: 0.875rem;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .info-row:last-child { border-bottom: 0; }
+    .info-row-icon {
+      width: 2.25rem; height: 2.25rem;
+      border-radius: var(--radius-sm);
+      background: var(--bg-3);
+      color: var(--mint);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .info-row-text { flex: 1; min-width: 0; }
+    .info-row-text strong { display: block; font-size: 0.9375rem; }
+    .info-row-text span { color: var(--fg-muted); font-size: 0.8125rem; }
+    .info-row a { color: var(--mint); font-size: 0.875rem; font-weight: 600; }
+
+    #pharmacy-map { height: 220px; }
+  </style>
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <div class="page-header">
+    <a href="/client/home" class="btn btn-secondary btn-sm">
+      <svg class="rtl-flip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      <span data-i18n="common.back">رجوع</span>
+    </a>
+  </div>
+
+  <div id="root">
+    <div class="skeleton skeleton-card" style="height: 14rem; margin-bottom: 1rem"></div>
+    <div class="skeleton skeleton-card" style="height: 8rem"></div>
+  </div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+<script src="/maps.js"></script>
+<script>
+  applyLang(currentLang);
+  const id = new URLSearchParams(location.search).get("id");
+
+  async function init() {
+    const me = await requireAuth("client");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderClientNav("/client/home");
+    if (!id) { location.href = "/client/home"; return; }
+    try {
+      const p = await api(`/api/pharmacies/${id}`);
+      render(p);
+    } catch (err) { toast(err.message, "error"); }
+  }
+
+  function isOpenNow(p) {
+    if (p.is_24_hours) return true;
+    if (!p.opens_at || !p.closes_at) return null;
+    const now = new Date();
+    const hm = now.getHours() * 60 + now.getMinutes();
+    const [oH, oM] = p.opens_at.split(":").map(Number);
+    const [cH, cM] = p.closes_at.split(":").map(Number);
+    const open = oH * 60 + oM;
+    let close = cH * 60 + cM;
+    if (close < open) close += 24 * 60;
+    return hm >= open && hm <= close;
+  }
+
+  async function render(p) {
+    const name = currentLang === "ar" ? p.name_ar : p.name_en;
+    const open = isOpenNow(p);
+    const root = document.getElementById("root");
+    root.innerHTML = `
+      <div class="ph-hero">
+        <div class="ph-hero-row">
+          ${avatarHtml(name, "xl")}
+          <div class="flex-1" style="min-width:0">
+            <h1>${name}</h1>
+            <div class="ph-area">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              ${p.area || ""}${p.address ? " · " + p.address : ""}
+            </div>
+          </div>
+        </div>
+
+        <div class="ph-hero-stats">
+          <span class="pill pill-amber pill-no-dot">${iconStarFilled(12)}<span style="margin-inline-start:0.25rem">${(p.rating || 0).toFixed(1)} (${p.total_orders || 0})</span></span>
+          ${p.is_verified ? `<span class="pill pill-mint">${t("common.verified")}</span>` : ""}
+          ${open === true ? `<span class="pill pill-green pill-live">${t("common.openNow")}</span>` :
+            open === false ? `<span class="pill pill-red">${t("common.closedNow")}</span>` :
+            p.is_24_hours ? `<span class="pill pill-mint pill-live">24/7</span>` : ""}
+          ${p.delivery_available ? `<span class="pill pill-blue pill-no-dot">🛵 ${p.delivery_fee_jod === 0 ? t("common.free") : `${p.delivery_fee_jod} ${t("common.jod")}`}</span>` : ""}
+        </div>
+
+        <a href="/client/order?pharmacy=${p.id}" class="btn btn-primary btn-lg btn-block">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span data-i18n="client.orderNow">اطلب الآن</span>
+        </a>
+      </div>
+
+      <div class="card info-card mb-4">
+        ${p.phone ? `
+          <div class="info-row">
+            <div class="info-row-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div class="info-row-text">
+              <strong>${currentLang === "ar" ? "الهاتف" : "Phone"}</strong>
+              <span dir="ltr">${formatPhone(p.phone)}</span>
+            </div>
+            <a href="tel:${p.phone}">${currentLang === "ar" ? "اتصل" : "Call"}</a>
+          </div>
+        ` : ""}
+
+        ${!p.is_24_hours && p.opens_at && p.closes_at ? `
+          <div class="info-row">
+            <div class="info-row-icon">${iconClock(16)}</div>
+            <div class="info-row-text">
+              <strong data-i18n="pharmacy.hours">${t("pharmacy.hours")}</strong>
+              <span dir="ltr">${p.opens_at} – ${p.closes_at}</span>
+            </div>
+          </div>
+        ` : ""}
+
+        <div class="info-row">
+          <div class="info-row-icon">${iconBike(16)}</div>
+          <div class="info-row-text">
+            <strong data-i18n="pharmacy.delivery">${t("pharmacy.delivery")}</strong>
+            <span>${p.delivery_available
+              ? (currentLang === "ar"
+                  ? `متوفر · ${p.delivery_fee_jod} د.أ · حتى ${p.delivery_radius_km} كم`
+                  : `Available · ${p.delivery_fee_jod} JOD · up to ${p.delivery_radius_km} km`)
+              : (currentLang === "ar" ? "غير متوفر — استلام فقط" : "Not available — pickup only")}</span>
+          </div>
+        </div>
+      </div>
+
+      ${p.latitude && p.longitude ? `
+        <div class="section-header"><h2 data-i18n="client.location">الموقع</h2>
+          <a href="https://www.google.com/maps?q=${p.latitude},${p.longitude}" target="_blank">
+            ${currentLang === "ar" ? "افتح في Google Maps" : "Open in Google Maps"} →
+          </a>
+        </div>
+        <div class="gmap-container" id="pharmacy-map"></div>
+      ` : ""}
+    `;
+
+    if (p.latitude && p.longitude) {
+      const handle = await createDraggableMap({
+        container: document.getElementById("pharmacy-map"),
+        lat: p.latitude, lng: p.longitude,
+        zoom: 15, lang: currentLang,
+      });
+      if (handle.ok) {
+        handle.marker.setDraggable(false);
+        handle.map.setOptions({ disableDoubleClickZoom: false });
+      }
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>

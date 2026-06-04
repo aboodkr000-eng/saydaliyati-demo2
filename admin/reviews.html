@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reviews · Admin · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="admin.reviews">التقييمات</h1>
+    <p class="page-subtitle" id="count"></p>
+  </header>
+
+  <div class="admin-table-wrap admin-table-scroll" id="wrap">
+    <div class="skeleton" style="height:20rem"></div>
+  </div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  let reviews = [];
+  let lastJson = "";
+
+  async function refresh() {
+    try {
+      const fresh = await api("/api/admin/reviews");
+      const json = JSON.stringify(fresh);
+      if (json === lastJson) return;
+      lastJson = json;
+      reviews = fresh;
+      render();
+    } catch {}
+  }
+
+  function render() {
+    document.getElementById("count").textContent = `${reviews.length}`;
+    if (reviews.length === 0) {
+      document.getElementById("wrap").innerHTML = `<div class="empty"><p>${t("admin.noResults")}</p></div>`;
+      return;
+    }
+    document.getElementById("wrap").innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>${t("admin.client")}</th>
+            <th>${t("admin.pharmacy")}</th>
+            <th>${t("admin.rating")}</th>
+            <th>${t("admin.comment")}</th>
+            <th>${t("admin.created")}</th>
+            <th style="text-align:end">${t("admin.actions")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reviews.map((r) => `
+            <tr>
+              <td>
+                <div class="flex items-center gap-2">
+                  ${avatarHtml(r.client_name || "?", "sm")}
+                  <span class="truncate-md">${r.client_name || "—"}</span>
+                </div>
+              </td>
+              <td><span class="truncate-md">${r.pharmacy_name_en || "—"}</span></td>
+              <td>
+                <span class="pill pill-amber pill-no-dot">${"⭐".repeat(r.rating)}</span>
+              </td>
+              <td>
+                <div class="muted truncate-md" title="${(r.comment || "").replace(/"/g, "&quot;")}">${r.comment || "—"}</div>
+              </td>
+              <td><span class="muted text-xs">${formatDate(r.created_at)}</span></td>
+              <td>
+                <div class="row-actions">
+                  <button class="icon-mini danger" onclick="deleteReview('${r.id}')" title="Delete">${iconTrash(14)}</button>
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  async function deleteReview(id) {
+    if (!confirm(t("admin.confirmDelete").replace("{kind}", "review"))) return;
+    try {
+      await api(`/api/admin/reviews/${id}`, { method: "DELETE" });
+      toast("Deleted", "success");
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  }
+  window.deleteReview = deleteReview;
+
+  (async () => {
+    const me = await requireAuth("admin");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderAdminNav("/admin/reviews");
+    await refresh();
+    startPolling(refresh, 8000);
+  })();
+</script>
+</body>
+</html>

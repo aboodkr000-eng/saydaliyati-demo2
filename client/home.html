@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .hero-loc {
+      display: flex; align-items: center; gap: 0.875rem;
+      padding: 1rem 1.25rem;
+      background: var(--bg-2);
+      background-image: var(--grad-hero);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 1.25rem;
+    }
+    .hero-loc-icon {
+      width: 2.75rem; height: 2.75rem;
+      border-radius: var(--radius);
+      background: var(--mint-soft);
+      color: var(--mint);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .hero-loc-text { flex: 1; min-width: 0; }
+    .hero-loc-text strong { display: block; font-size: 0.9375rem; font-weight: 700; }
+    .hero-loc-text span { font-size: 0.8125rem; color: var(--fg-muted); }
+
+    /* List/map switcher */
+    .view-switcher {
+      display: inline-flex;
+      padding: 0.25rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+    .view-switcher button {
+      padding: 0.5rem 1rem;
+      border: 0;
+      background: transparent;
+      color: var(--fg-muted);
+      font-weight: 600; font-size: 0.875rem;
+      border-radius: 999px;
+      transition: all 0.15s;
+    }
+    .view-switcher button.active {
+      background: var(--mint);
+      color: #000;
+    }
+
+    /* Map view */
+    #map-view { height: 70vh; min-height: 500px; }
+
+    /* Sticky controls bar on mobile */
+    .controls {
+      position: sticky;
+      top: 4rem; z-index: 10;
+      background: var(--bg);
+      padding: 1rem 0;
+      margin: -1rem 0 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <p class="muted text-sm" id="greeting" style="margin:0 0 0.25rem"></p>
+    <h1 class="page-title" data-i18n="client.findPharmacy">ابحث عن صيدلية</h1>
+  </header>
+
+  <!-- Location hero -->
+  <div class="hero-loc" id="loc-hero">
+    <div class="hero-loc-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    </div>
+    <div class="hero-loc-text">
+      <strong id="loc-title" data-i18n="client.loadingLocation">جاري تحديد موقعك…</strong>
+      <span id="loc-sub"></span>
+    </div>
+    <button class="btn btn-secondary btn-sm" id="locate-btn" data-i18n="client.useMyLocation">استخدم موقعي</button>
+    <button class="btn btn-ghost btn-sm" id="pick-area-btn" data-i18n="client.setLocation">حدد موقعك</button>
+  </div>
+
+  <!-- Location & address picker -->
+  <div class="modal-bg" id="loc-modal">
+    <div class="modal" style="max-width:34rem">
+      <h3 data-i18n="client.locationModalTitle">حدد موقعك وعنوانك</h3>
+      <p class="muted text-sm" data-i18n="client.locationModalSub">اسحب الدبّوس لمكان التوصيل، واملأ تفاصيل العنوان.</p>
+
+      <div class="gmap-container mt-4" id="picker-map" style="height:240px"></div>
+
+      <button type="button" class="btn btn-secondary btn-sm mt-4" id="picker-locate">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+        <span data-i18n="client.useMyLocation">استخدم موقعي</span>
+      </button>
+
+      <div class="grid grid-2 mt-6" style="gap:0.875rem">
+        <div class="field">
+          <label class="label" data-i18n="client.addrArea">المنطقة</label>
+          <input class="input" id="addr-area" data-i18n-placeholder="client.addrAreaPh" placeholder="مثلاً: عبدون" />
+        </div>
+        <div class="field">
+          <label class="label" data-i18n="client.addrFloor">الطابق / الشقة</label>
+          <input class="input" id="addr-floor" data-i18n-placeholder="client.addrFloorPh" placeholder="ط٣ شقة ١٢" />
+        </div>
+      </div>
+      <div class="field mt-4">
+        <label class="label" data-i18n="client.addrStreet">الشارع / رقم العمارة</label>
+        <input class="input" id="addr-street" data-i18n-placeholder="client.addrStreetPh" placeholder="شارع سيرين، عمارة ٥" />
+      </div>
+      <div class="field mt-4">
+        <label class="label" data-i18n="client.addrLandmark">معلم قريب (اختياري)</label>
+        <input class="input" id="addr-landmark" data-i18n-placeholder="client.addrLandmarkPh" placeholder="جنب كوزمو" />
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button type="button" class="btn btn-secondary flex-1" onclick="closeLocModal()" data-i18n="common.cancel">إلغاء</button>
+        <button type="button" class="btn btn-primary flex-1" id="save-loc" data-i18n="common.save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-bar mb-4">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="search" class="input" data-i18n-placeholder="client.searchPlaceholder" placeholder="ابحث بالاسم أو المنطقة…" />
+  </div>
+
+  <!-- Filters + view switcher -->
+  <div class="flex justify-between items-center gap-4 mb-6 flex-wrap">
+    <div class="chips">
+      <button class="chip active" data-filter="all" data-i18n="client.filterAll">الكل</button>
+      <button class="chip" data-filter="open" data-i18n="client.filterOpen">مفتوحة الآن</button>
+      <button class="chip" data-filter="delivery" data-i18n="client.filterDelivery">توصيل مجاني</button>
+      <button class="chip" data-filter="top" data-i18n="client.filterTop">الأعلى تقييماً</button>
+    </div>
+    <div class="view-switcher">
+      <button class="active" data-view="list" data-i18n="client.list">قائمة</button>
+      <button data-view="map" data-i18n="client.map">خريطة</button>
+    </div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div id="grid" class="grid grid-3"></div>
+  <div id="empty" class="empty hidden">
+    <div class="empty-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <h3 data-i18n="client.noResults">ما في صيدليات تطابق بحثك</h3>
+    <p data-i18n="client.tryDifferent">جرّب بحث مختلف أو فلتر مختلف</p>
+  </div>
+
+  <!-- MAP VIEW -->
+  <div id="map-view" class="gmap-container hidden"></div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+<script src="/maps.js"></script>
+<script>
+  applyLang(currentLang);
+
+  let allPharmacies = [];
+  let filtered = [];
+  let me;
+  let userCoords = null;
+  let currentFilter = "all";
+  let mapInstance = null;
+
+  const locTitle = document.getElementById("loc-title");
+  const locSub = document.getElementById("loc-sub");
+  const locHero = document.getElementById("loc-hero");
+
+  function setLocStatus(state, title, sub) {
+    locHero.style.borderColor = state === "success" ? "rgba(0,229,168,0.3)" :
+                                state === "warn" ? "rgba(255,176,32,0.3)" : "";
+    locTitle.textContent = title;
+    locSub.textContent = sub || "";
+  }
+
+  function geolocate() {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        setLocStatus("warn", t("client.locationDenied"), t("client.locationFallback"));
+        return resolve(null);
+      }
+      setLocStatus("", t("client.loadingLocation"), "");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocStatus("success", t("client.usingYourLocation"), `${userCoords.lat.toFixed(4)}, ${userCoords.lng.toFixed(4)}`);
+          resolve(userCoords);
+        },
+        (err) => {
+          setLocStatus("warn",
+            err.code === 1 ? t("client.locationDenied") : t("client.locationFailed"),
+            t("client.locationFallback"));
+          resolve(null);
+        },
+        { timeout: 8000, maximumAge: 60000 }
+      );
+    });
+  }
+
+  async function loadPharmacies() {
+    const ref = userCoords || { lat: 31.9539, lng: 35.9106 };
+    try {
+      allPharmacies = await api(`/api/pharmacies?lat=${ref.lat}&lng=${ref.lng}`);
+      applyFilters();
+    } catch (err) { toast(err.message, "error"); }
+  }
+
+  function applyFilters() {
+    const q = document.getElementById("search").value.toLowerCase().trim();
+    filtered = allPharmacies.filter((p) => {
+      if (q && !p.name_en.toLowerCase().includes(q) &&
+          !p.name_ar.includes(document.getElementById("search").value) &&
+          !(p.area && p.area.toLowerCase().includes(q))) return false;
+      if (currentFilter === "open") {
+        if (!p.is_24_hours) {
+          if (!p.opens_at || !p.closes_at) return false;
+          const now = new Date();
+          const hm = now.getHours() * 60 + now.getMinutes();
+          const [oH, oM] = p.opens_at.split(":").map(Number);
+          const [cH, cM] = p.closes_at.split(":").map(Number);
+          const open = oH * 60 + oM;
+          let close = cH * 60 + cM;
+          if (close < open) close += 24 * 60;
+          if (hm < open || hm > close) return false;
+        }
+      }
+      if (currentFilter === "delivery" && (!p.delivery_available || p.delivery_fee_jod > 0)) return false;
+      if (currentFilter === "top" && (p.rating || 0) < 4.5) return false;
+      return true;
+    });
+    renderList();
+    if (!document.getElementById("map-view").classList.contains("hidden")) renderMap();
+  }
+
+  function isOpenNow(p) {
+    if (p.is_24_hours) return true;
+    if (!p.opens_at || !p.closes_at) return null;
+    const now = new Date();
+    const hm = now.getHours() * 60 + now.getMinutes();
+    const [oH, oM] = p.opens_at.split(":").map(Number);
+    const [cH, cM] = p.closes_at.split(":").map(Number);
+    const open = oH * 60 + oM;
+    let close = cH * 60 + cM;
+    if (close < open) close += 24 * 60;
+    return hm >= open && hm <= close;
+  }
+
+  function pharmCard(p) {
+    const name = currentLang === "ar" ? p.name_ar : p.name_en;
+    const subName = currentLang === "ar" ? p.name_en : p.name_ar;
+    const open = isOpenNow(p);
+    const distance = p.distance_km != null ? `${p.distance_km} ${t("common.km")}` : "";
+    return `
+      <a href="/client/pharmacy?id=${p.id}" class="pharm-card">
+        ${distance ? `<div class="pharm-card-dist">${distance}</div>` : ""}
+        <div class="pharm-card-head">
+          ${avatarHtml(name, "lg")}
+          <div class="pharm-card-info">
+            <h3>
+              <span class="truncate">${name}</span>
+              ${p.is_verified ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="#00E5A8"><path d="M12 2 L14.4 7.6 L20 9.5 L16 14 L17 20 L12 17 L7 20 L8 14 L4 9.5 L9.6 7.6 Z"/></svg>` : ""}
+            </h3>
+            <div class="pharm-card-area">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              ${p.area || ""}
+            </div>
+          </div>
+        </div>
+        <div class="pharm-card-stats">
+          <span class="pharm-card-stat icon-amber">${iconStarFilled(13)}<strong>${(p.rating || 0).toFixed(1)}</strong><span class="muted">(${p.total_orders || 0})</span></span>
+          ${open === true ? `<span class="pill pill-green pill-no-dot" style="padding:0.125rem 0.5rem;font-size:0.6875rem">${t("common.open")}</span>` :
+            open === false ? `<span class="pill pill-red pill-no-dot" style="padding:0.125rem 0.5rem;font-size:0.6875rem">${t("common.closed")}</span>` :
+            p.is_24_hours ? `<span class="pill pill-mint pill-no-dot" style="padding:0.125rem 0.5rem;font-size:0.6875rem">24/7</span>` : ""}
+          ${p.delivery_available ? `<span class="pharm-card-stat">${iconBike(13)}${p.delivery_fee_jod === 0 ? t("common.free") : `${p.delivery_fee_jod} ${t("common.jod")}`}</span>` : ""}
+        </div>
+      </a>
+    `;
+  }
+
+  function renderList() {
+    const grid = document.getElementById("grid");
+    const empty = document.getElementById("empty");
+    if (filtered.length === 0) {
+      grid.innerHTML = "";
+      empty.classList.remove("hidden");
+    } else {
+      empty.classList.add("hidden");
+      grid.innerHTML = filtered.map(pharmCard).join("");
+    }
+  }
+
+  async function renderMap() {
+    const container = document.getElementById("map-view");
+    if (!mapInstance) {
+      const center = userCoords || { lat: 31.9539, lng: 35.9106 };
+      const locations = filtered
+        .filter((p) => p.latitude && p.longitude)
+        .map((p) => ({
+          lat: p.latitude, lng: p.longitude,
+          title: currentLang === "ar" ? p.name_ar : p.name_en,
+          id: p.id,
+        }));
+      mapInstance = await createListMap({
+        container,
+        center,
+        locations,
+        lang: currentLang,
+        onMarkerClick: (loc) => location.href = `/client/pharmacy?id=${loc.id}`,
+      });
+    }
+  }
+
+  // Init
+  async function init() {
+    me = await requireAuth("client");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderClientNav("/client/home");
+    document.getElementById("greeting").textContent = `${t("client.greeting")}, ${me.full_name?.split(" ")[0] || ""} 👋`;
+
+    document.getElementById("grid").innerHTML = `
+      ${skeletonRows(6, "10rem")}
+    `.replace(/<div class="skeleton"/g, '<div class="skeleton skeleton-card"');
+
+    // 1. If user has a saved location/address, use it.
+    if (me.latitude != null && me.longitude != null) {
+      userCoords = { lat: me.latitude, lng: me.longitude };
+      setLocStatus("success", t("client.savedLocation"), me.address || `${me.latitude.toFixed(4)}, ${me.longitude.toFixed(4)}`);
+    } else {
+      // 2. Otherwise try GPS.
+      await geolocate();
+    }
+    await loadPharmacies();
+  }
+
+  // Wire up
+  document.getElementById("locate-btn").addEventListener("click", async () => {
+    await geolocate();
+    await loadPharmacies();
+    if (mapInstance && userCoords) mapInstance.map.panTo(userCoords);
+  });
+
+  // ---------- Manual location & address picker ----------
+  let pickerHandle = null;
+
+  function buildAddressString() {
+    const area = document.getElementById("addr-area").value.trim();
+    const street = document.getElementById("addr-street").value.trim();
+    const floor = document.getElementById("addr-floor").value.trim();
+    const landmark = document.getElementById("addr-landmark").value.trim();
+    const main = [street, floor, area].filter(Boolean).join(" · ");
+    return landmark ? (main ? `${main} · ${landmark}` : landmark) : main;
+  }
+
+  function applyAddressString(s) {
+    // Heuristic split on " · " — area is usually last (before landmark).
+    // We don't have to be perfect; user can edit.
+    if (!s) return;
+    document.getElementById("addr-street").value = s;
+  }
+
+  async function openLocModal() {
+    document.getElementById("loc-modal").classList.add("show");
+    // Pre-fill from saved values
+    document.getElementById("addr-area").value = "";
+    document.getElementById("addr-floor").value = "";
+    document.getElementById("addr-street").value = "";
+    document.getElementById("addr-landmark").value = "";
+    if (me.address) applyAddressString(me.address);
+
+    // Init map (or trigger resize if already created)
+    setTimeout(async () => {
+      const startLat = me.latitude || userCoords?.lat || 31.9539;
+      const startLng = me.longitude || userCoords?.lng || 35.9106;
+      if (!pickerHandle) {
+        pickerHandle = await createDraggableMap({
+          container: document.getElementById("picker-map"),
+          lat: startLat, lng: startLng,
+          zoom: me.latitude ? 16 : 12,
+          lang: currentLang,
+        });
+        if (pickerHandle.ok) {
+          pickerHandle.map.addListener("click", (e) => {
+            pickerHandle.marker.setPosition(e.latLng);
+          });
+        }
+      } else if (pickerHandle.ok) {
+        pickerHandle.setLocation(startLat, startLng);
+        google.maps.event.trigger(pickerHandle.map, "resize");
+      }
+    }, 60);
+  }
+  function closeLocModal() { document.getElementById("loc-modal").classList.remove("show"); }
+  window.closeLocModal = closeLocModal;
+
+  document.getElementById("pick-area-btn").addEventListener("click", openLocModal);
+  document.getElementById("loc-modal").addEventListener("click", (e) => {
+    if (e.target.id === "loc-modal") closeLocModal();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLocModal(); });
+
+  document.getElementById("picker-locate").addEventListener("click", () => {
+    if (!navigator.geolocation || !pickerHandle?.ok) return toast("Map not ready", "error");
+    const btn = document.getElementById("picker-locate");
+    btn.disabled = true;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        pickerHandle.setLocation(pos.coords.latitude, pos.coords.longitude);
+        btn.disabled = false;
+      },
+      () => { btn.disabled = false; toast(t("auth.locationDenied"), "error"); },
+      { timeout: 8000 }
+    );
+  });
+
+  document.getElementById("save-loc").addEventListener("click", async () => {
+    if (!pickerHandle?.ok) return toast("Map not ready — make sure your Google Maps key is configured.", "error");
+    const pos = pickerHandle.marker.getPosition();
+    const lat = pos.lat();
+    const lng = pos.lng();
+    const address = buildAddressString();
+    try {
+      await api("/api/auth/me", { method: "PATCH", body: { latitude: lat, longitude: lng, address } });
+      me.latitude = lat; me.longitude = lng; me.address = address;
+      userCoords = { lat, lng };
+      setLocStatus("success", t("client.usingYourLocation"), address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      closeLocModal();
+      await loadPharmacies();
+      if (mapInstance) mapInstance.map.panTo(userCoords);
+      toast(t("common.saved"), "success");
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  document.getElementById("search").addEventListener("input", applyFilters);
+
+  document.querySelectorAll(".chip[data-filter]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".chip[data-filter]").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      currentFilter = chip.dataset.filter;
+      applyFilters();
+    });
+  });
+
+  document.querySelectorAll("[data-view]").forEach((b) => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("[data-view]").forEach((x) => x.classList.remove("active"));
+      b.classList.add("active");
+      const view = b.dataset.view;
+      document.getElementById("grid").classList.toggle("hidden", view !== "list");
+      document.getElementById("map-view").classList.toggle("hidden", view !== "map");
+      document.getElementById("empty").classList.add("hidden");
+      if (view === "map") renderMap();
+    });
+  });
+
+  init();
+</script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orders · Admin · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="admin.orders">الطلبات</h1>
+    <p class="page-subtitle" id="count"></p>
+  </header>
+
+  <div class="chips mb-4" id="status-chips">
+    <button class="chip active" data-status="">All</button>
+  </div>
+
+  <div class="admin-table-wrap admin-table-scroll" id="wrap">
+    <div class="skeleton" style="height:20rem"></div>
+  </div>
+</main>
+
+<!-- Edit modal -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal" style="max-width:30rem">
+    <h3 data-i18n="admin.editOrder">تعديل الطلب</h3>
+    <form id="edit-form" class="stack-md mt-4">
+      <input type="hidden" name="id" />
+      <div class="field">
+        <label class="label" data-i18n="admin.status">الحالة</label>
+        <select class="select input" name="status">
+          <option value="pending">pending</option>
+          <option value="quoted">quoted</option>
+          <option value="confirmed">confirmed</option>
+          <option value="preparing">preparing</option>
+          <option value="ready_for_pickup">ready_for_pickup</option>
+          <option value="out_for_delivery">out_for_delivery</option>
+          <option value="completed">completed</option>
+          <option value="cancelled">cancelled</option>
+          <option value="rejected">rejected</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label">${'Total (JOD)'}</label>
+        <input class="input" name="total_jod" type="number" step="0.01" min="0" dir="ltr" />
+      </div>
+      <div class="flex gap-3 mt-4">
+        <button type="button" class="btn btn-secondary flex-1" onclick="closeModal()" data-i18n="common.cancel">إلغاء</button>
+        <button type="submit" class="btn btn-primary flex-1" data-i18n="common.save">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  let orders = [];
+  let lastJson = "";
+  let currentStatus = "";
+
+  const STATUSES = ["pending","quoted","confirmed","preparing","ready_for_pickup","out_for_delivery","completed","cancelled","rejected"];
+
+  function buildChips() {
+    const el = document.getElementById("status-chips");
+    el.innerHTML = `<button class="chip active" data-status="">All</button>` +
+      STATUSES.map((s) => `<button class="chip" data-status="${s}">${t("status." + s)}</button>`).join("");
+    el.querySelectorAll(".chip").forEach((c) => {
+      c.addEventListener("click", () => {
+        el.querySelectorAll(".chip").forEach((x) => x.classList.remove("active"));
+        c.classList.add("active");
+        currentStatus = c.dataset.status;
+        apply();
+      });
+    });
+  }
+
+  async function refresh() {
+    try {
+      const fresh = await api("/api/admin/orders");
+      const json = JSON.stringify(fresh);
+      if (json === lastJson) return;
+      lastJson = json;
+      orders = fresh;
+      apply();
+    } catch {}
+  }
+
+  function apply() {
+    const filtered = currentStatus ? orders.filter((o) => o.status === currentStatus) : orders;
+    document.getElementById("count").textContent = `${filtered.length} / ${orders.length}`;
+
+    if (filtered.length === 0) {
+      document.getElementById("wrap").innerHTML = `<div class="empty"><p>${t("admin.noResults")}</p></div>`;
+      return;
+    }
+
+    document.getElementById("wrap").innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>${t("admin.client")}</th>
+            <th>${t("admin.pharmacy")}</th>
+            <th>${t("admin.status")}</th>
+            <th>${t("admin.total")}</th>
+            <th>Fulfillment</th>
+            <th>${t("admin.created")}</th>
+            <th style="text-align:end">${t("admin.actions")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((o) => `
+            <tr>
+              <td>
+                <div class="flex items-center gap-2">
+                  ${avatarHtml(o.client_name || "?", "sm")}
+                  <span class="truncate-md">${o.client_name || "—"}</span>
+                </div>
+              </td>
+              <td><span class="truncate-md">${o.pharmacy_name_en || "—"}</span></td>
+              <td>${statusPill(o.status)}</td>
+              <td>${o.total_jod != null ? `<strong>${o.total_jod} ${t("common.jod")}</strong>` : "—"}</td>
+              <td><span class="muted text-xs">${o.fulfillment}</span></td>
+              <td><span class="muted text-xs">${formatDate(o.created_at)}</span></td>
+              <td>
+                <div class="row-actions">
+                  <button class="icon-mini" onclick="editOrder('${o.id}')" title="Edit">${iconPencil(14)}</button>
+                  <button class="icon-mini danger" onclick="deleteOrder('${o.id}')" title="Delete">${iconTrash(14)}</button>
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function editOrder(id) {
+    const o = orders.find((x) => x.id === id);
+    if (!o) return;
+    const form = document.getElementById("edit-form");
+    form.elements.id.value = o.id;
+    form.elements.status.value = o.status;
+    form.elements.total_jod.value = o.total_jod ?? "";
+    document.getElementById("edit-modal").classList.add("show");
+  }
+  window.editOrder = editOrder;
+
+  async function deleteOrder(id) {
+    if (!confirm(t("admin.confirmDelete").replace("{kind}", "order"))) return;
+    try {
+      await api(`/api/admin/orders/${id}`, { method: "DELETE" });
+      toast("Deleted", "success");
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  }
+  window.deleteOrder = deleteOrder;
+
+  function closeModal() { document.getElementById("edit-modal").classList.remove("show"); }
+  window.closeModal = closeModal;
+  document.getElementById("edit-modal").addEventListener("click", (e) => { if (e.target.id === "edit-modal") closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  document.getElementById("edit-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const id = data.id;
+    delete data.id;
+    if (data.total_jod === "") delete data.total_jod;
+    else data.total_jod = parseFloat(data.total_jod);
+    try {
+      await api(`/api/admin/orders/${id}`, { method: "PATCH", body: data });
+      closeModal();
+      toast(t("common.saved"), "success");
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  (async () => {
+    const me = await requireAuth("admin");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderAdminNav("/admin/orders");
+    buildChips();
+    await refresh();
+    startPolling(refresh, 6000);
+  })();
+</script>
+</body>
+</html>

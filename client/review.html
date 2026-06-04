@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .stars-input { display: flex; gap: 0.5rem; justify-content: center; margin: 1.5rem 0; }
+    .stars-input .star { width: 2.75rem; height: 2.75rem; }
+  </style>
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container" style="max-width: 36rem">
+  <div class="page-header">
+    <a id="back" class="btn btn-secondary btn-sm">
+      <svg class="rtl-flip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      <span data-i18n="common.back">رجوع</span>
+    </a>
+    <h1 class="page-title mt-4" data-i18n="client.reviewTitle">قيّم تجربتك</h1>
+    <p class="page-subtitle" data-i18n="client.reviewSub">ساعد غيرك بمشاركة تجربتك.</p>
+  </div>
+
+  <form id="form" class="card">
+    <p class="muted text-sm center" id="pharm-name"></p>
+    <div class="stars-input" id="stars">
+      
+    </div>
+    <div class="field">
+      <label class="label" data-i18n="common.notes"></label>
+      <textarea class="textarea" name="comment" data-i18n-placeholder="client.reviewPlaceholder" placeholder="احكي عن طلبك…"></textarea>
+    </div>
+    <input type="hidden" name="rating" value="5" />
+    <button type="submit" class="btn btn-primary btn-lg btn-block mt-6" id="submit">
+      <span data-i18n="client.submitReview">إرسال التقييم</span>
+    </button>
+  </form>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  const orderId = new URLSearchParams(location.search).get("order");
+  document.getElementById("back").href = `/client/order-detail?id=${orderId}`;
+
+  const stars = document.getElementById("stars");
+  let rating = 5;
+  function paint() {
+    stars.innerHTML = [1,2,3,4,5].map(n => `
+      <span class="star ${n <= rating ? "filled" : ""}" data-v="${n}">
+        ${iconStarFilled(28)}
+      </span>
+    `).join("");
+    document.querySelector('input[name="rating"]').value = rating;
+    document.querySelectorAll(".star[data-v]").forEach(s => {
+      s.addEventListener("click", () => { rating = +s.dataset.v; paint(); });
+    });
+  }
+
+  async function init() {
+    const me = await requireAuth("client");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderClientNav("/client/orders");
+    paint();
+    try {
+      const order = await api(`/api/orders/${orderId}`);
+      document.getElementById("pharm-name").textContent =
+        currentLang === "ar" ? order.pharmacy_name_ar : order.pharmacy_name_en;
+    } catch {}
+  }
+
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    data.rating = parseInt(data.rating, 10);
+    data.order_id = orderId;
+    const btn = document.getElementById("submit");
+    btn.disabled = true;
+    try {
+      await api("/api/reviews", { method: "POST", body: data });
+      toast(t("client.reviewSubmitted"), "success");
+      setTimeout(() => location.href = `/client/order-detail?id=${orderId}`, 800);
+    } catch (err) { toast(err.message, "error"); btn.disabled = false; }
+  });
+
+  init();
+</script>
+</body>
+</html>

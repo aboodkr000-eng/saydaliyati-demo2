@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Place order · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .wizard-card {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 1.75rem;
+      box-shadow: var(--shadow);
+    }
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; animation: fadeIn 0.25s; }
+    .wizard-step h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.5rem; font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+    .wizard-step .wizard-sub {
+      color: var(--fg-muted); font-size: 0.9375rem;
+      margin: 0 0 1.5rem;
+    }
+    .wizard-actions {
+      display: flex; gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
+    /* Upload area */
+    .uploader {
+      border: 2px dashed var(--border-2);
+      border-radius: var(--radius-lg);
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.18s;
+      background: var(--bg-3);
+    }
+    .uploader:hover { border-color: var(--mint); background: rgba(0,229,168,0.04); }
+    .uploader.has-file { border-color: var(--mint); border-style: solid; background: rgba(0,229,168,0.06); }
+    .uploader-icon {
+      width: 3.5rem; height: 3.5rem;
+      margin: 0 auto 0.875rem;
+      border-radius: var(--radius);
+      background: var(--mint-soft);
+      color: var(--mint);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .uploader strong { display: block; margin-bottom: 0.25rem; font-size: 1rem; }
+    .uploader span { font-size: 0.8125rem; color: var(--fg-muted); }
+    .upload-preview {
+      max-width: 100%; max-height: 16rem;
+      border-radius: var(--radius);
+      margin: 0 auto;
+    }
+
+    /* Fulfillment toggle */
+    .toggle-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .toggle-option {
+      padding: 1.5rem 1rem;
+      border-radius: var(--radius-lg);
+      background: var(--bg-3);
+      border: 2px solid var(--border);
+      cursor: pointer;
+      transition: all 0.18s;
+      text-align: center;
+    }
+    .toggle-option:hover { border-color: var(--border-2); }
+    .toggle-option.active {
+      border-color: var(--mint);
+      background: rgba(0,229,168,0.06);
+    }
+    .toggle-option:disabled, .toggle-option.disabled {
+      opacity: 0.4; cursor: not-allowed;
+    }
+    .toggle-option .opt-icon {
+      width: 2.5rem; height: 2.5rem;
+      border-radius: var(--radius);
+      background: var(--bg-4);
+      color: var(--fg-muted);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 0.625rem;
+      transition: all 0.18s;
+    }
+    .toggle-option.active .opt-icon {
+      background: var(--mint); color: #000;
+    }
+    .toggle-option strong { display: block; font-size: 0.9375rem; }
+    .toggle-option span { font-size: 0.75rem; color: var(--fg-muted); }
+
+    /* Review summary */
+    .review-row {
+      display: flex; justify-content: space-between;
+      padding: 0.875rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9375rem;
+    }
+    .review-row:last-of-type { border-bottom: 0; }
+    .review-row .label { color: var(--fg-muted); }
+    .review-row strong { font-weight: 700; max-width: 60%; text-align: end; }
+  </style>
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <div class="page-header">
+    <a id="back-link" class="btn btn-secondary btn-sm" href="/client/home">
+      <svg class="rtl-flip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      <span data-i18n="common.back">رجوع</span>
+    </a>
+    <h1 class="page-title mt-4" data-i18n="client.orderNow">اطلب الآن</h1>
+    <p class="page-subtitle" id="pharmacy-name"></p>
+  </div>
+
+  <!-- Progress -->
+  <div class="stepper" id="stepper">
+    <div class="stepper-step current" data-step="1">
+      <div class="stepper-bar"></div>
+      <div class="stepper-label" data-i18n="client.stepUpload">١. رفع الوصفة</div>
+    </div>
+    <div class="stepper-step" data-step="2">
+      <div class="stepper-bar"></div>
+      <div class="stepper-label" data-i18n="client.stepFulfill">٢. الاستلام</div>
+    </div>
+    <div class="stepper-step" data-step="3">
+      <div class="stepper-bar"></div>
+      <div class="stepper-label" data-i18n="client.stepReview">٣. مراجعة</div>
+    </div>
+  </div>
+
+  <form id="form" class="wizard-card" enctype="multipart/form-data">
+    <input type="hidden" name="pharmacy_id" id="pharmacy-id" />
+
+    <!-- STEP 1: Upload -->
+    <div class="wizard-step active" data-step="1">
+      <h2 data-i18n="client.uploadPrescription">ارفع وصفتك</h2>
+      <p class="wizard-sub" data-i18n="client.uploadDesc">صورة أو PDF، حتى 8 ميجابايت.</p>
+
+      <label class="uploader" id="uploader-label">
+        <input type="file" name="prescription" id="file-input" accept="image/*,application/pdf" hidden />
+        <div id="uploader-empty">
+          <div class="uploader-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <strong data-i18n="client.uploadCta">اضغط أو اسحب الصورة هنا</strong>
+          <span data-i18n="client.uploadDesc">صورة أو PDF، حتى 8 ميجابايت.</span>
+        </div>
+        <div id="uploader-filled" class="hidden">
+          <img id="upload-img" class="upload-preview" alt="" />
+          <strong id="upload-filename" style="margin-top: 0.625rem"></strong>
+          <span><span data-i18n="client.changeFile">تغيير الملف</span></span>
+        </div>
+      </label>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-primary btn-lg btn-block" onclick="nextStep()" data-i18n="common.next">التالي</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Fulfillment + address + notes -->
+    <div class="wizard-step" data-step="2">
+      <h2 data-i18n="client.howReceive">كيف بتحبّ تستلم طلبك؟</h2>
+      <p class="wizard-sub" data-i18n="client.howReceiveSub">اختر بين الاستلام من الصيدلية أو التوصيل لباب البيت.</p>
+
+      <div class="toggle-group">
+        <button type="button" class="toggle-option active" data-value="pickup">
+          <div class="opt-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
+          </div>
+          <strong data-i18n="client.pickup">استلام</strong>
+          <span data-i18n="client.pickupSub">من الصيدلية</span>
+        </button>
+        <button type="button" class="toggle-option" data-value="delivery" id="delivery-opt">
+          <div class="opt-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6h3l3 5"/><path d="M5.5 17.5 9 8h6l3 9.5"/></svg>
+          </div>
+          <strong data-i18n="client.delivery">توصيل</strong>
+          <span data-i18n="client.deliverySub" id="delivery-sub">للبيت</span>
+        </button>
+      </div>
+      <input type="hidden" name="fulfillment" value="pickup" id="fulfillment-input" />
+
+      <div class="field mt-6 hidden" id="address-field">
+        <label class="label" data-i18n="client.address">عنوان التوصيل</label>
+        <textarea class="textarea" name="delivery_address" data-i18n-placeholder="client.addressPlaceholder" placeholder="عمارة 5، الطابق 3، شقة 12، عبدون"></textarea>
+      </div>
+
+      <div class="field mt-6">
+        <label class="label" data-i18n="client.notes">ملاحظات (اختياري)</label>
+        <textarea class="textarea" name="notes" data-i18n-placeholder="client.notesPlaceholder" placeholder="أي تفاصيل إضافية للصيدلي…"></textarea>
+      </div>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" onclick="prevStep()" data-i18n="common.back">رجوع</button>
+        <button type="button" class="btn btn-primary flex-1" onclick="nextStep()" data-i18n="common.next">التالي</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Review -->
+    <div class="wizard-step" data-step="3">
+      <h2 data-i18n="client.reviewTitle2">راجع طلبك</h2>
+      <p class="wizard-sub" data-i18n="client.reviewSub2">تأكد من المعلومات قبل الإرسال للصيدلي.</p>
+
+      <div id="review-summary"></div>
+
+      <div class="wizard-actions">
+        <button type="button" class="btn btn-secondary" onclick="prevStep()" data-i18n="common.back">رجوع</button>
+        <button type="submit" class="btn btn-primary flex-1" id="submit-btn">
+          <span data-i18n="client.placeOrder">إرسال الطلب</span>
+        </button>
+      </div>
+    </div>
+  </form>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  const pharmacyId = new URLSearchParams(location.search).get("pharmacy");
+  let pharmacy = null;
+  let me = null;
+  let currentStep = 1;
+
+  async function init() {
+    me = await requireAuth("client");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderClientNav("/client/home");
+    if (!pharmacyId) { location.href = "/client/home"; return; }
+    document.getElementById("pharmacy-id").value = pharmacyId;
+    document.getElementById("back-link").href = `/client/pharmacy?id=${pharmacyId}`;
+
+    // Prefill delivery address from saved profile
+    if (me.address) {
+      document.querySelector('[name="delivery_address"]').value = me.address;
+    }
+
+    try {
+      pharmacy = await api(`/api/pharmacies/${pharmacyId}`);
+      document.getElementById("pharmacy-name").textContent =
+        currentLang === "ar" ? pharmacy.name_ar : pharmacy.name_en;
+
+      if (!pharmacy.delivery_available) {
+        const opt = document.getElementById("delivery-opt");
+        opt.classList.add("disabled");
+        opt.disabled = true;
+        document.getElementById("delivery-sub").textContent = t("common.unavailable");
+      } else {
+        document.getElementById("delivery-sub").textContent =
+          pharmacy.delivery_fee_jod === 0 ? t("common.free") : `${pharmacy.delivery_fee_jod} ${t("common.jod")}`;
+      }
+    } catch (err) { toast(err.message, "error"); }
+  }
+
+  // File picker preview
+  const fileInput = document.getElementById("file-input");
+  const uploaderLabel = document.getElementById("uploader-label");
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    uploaderLabel.classList.add("has-file");
+    document.getElementById("uploader-empty").classList.add("hidden");
+    document.getElementById("uploader-filled").classList.remove("hidden");
+    document.getElementById("upload-filename").textContent = f.name;
+    if (f.type.startsWith("image/")) {
+      const url = URL.createObjectURL(f);
+      document.getElementById("upload-img").src = url;
+    } else {
+      document.getElementById("upload-img").style.display = "none";
+    }
+  });
+
+  // Fulfillment toggle
+  document.querySelectorAll(".toggle-option").forEach((opt) => {
+    opt.addEventListener("click", () => {
+      if (opt.disabled) return;
+      document.querySelectorAll(".toggle-option").forEach((o) => o.classList.remove("active"));
+      opt.classList.add("active");
+      const val = opt.dataset.value;
+      document.getElementById("fulfillment-input").value = val;
+      document.getElementById("address-field").classList.toggle("hidden", val !== "delivery");
+    });
+  });
+
+  // Step navigation
+  function showStep(n) {
+    document.querySelectorAll(".wizard-step").forEach((s) => {
+      s.classList.toggle("active", +s.dataset.step === n);
+    });
+    document.querySelectorAll(".stepper-step").forEach((s) => {
+      const sn = +s.dataset.step;
+      s.classList.toggle("done", sn < n);
+      s.classList.toggle("current", sn === n);
+    });
+    currentStep = n;
+    if (n === 3) buildSummary();
+  }
+  function nextStep() {
+    if (currentStep === 1 && !fileInput.files[0]) {
+      return toast(t("client.uploadFirst"), "error");
+    }
+    if (currentStep === 2 && document.getElementById("fulfillment-input").value === "delivery") {
+      const addr = document.querySelector('[name="delivery_address"]').value.trim();
+      if (!addr) return toast(t("client.addressRequired"), "error");
+    }
+    showStep(Math.min(3, currentStep + 1));
+  }
+  function prevStep() { showStep(Math.max(1, currentStep - 1)); }
+  window.nextStep = nextStep; window.prevStep = prevStep;
+
+  function buildSummary() {
+    const f = fileInput.files[0];
+    const ful = document.getElementById("fulfillment-input").value;
+    const addr = document.querySelector('[name="delivery_address"]').value.trim();
+    const notes = document.querySelector('[name="notes"]').value.trim();
+    const pharmName = currentLang === "ar" ? pharmacy.name_ar : pharmacy.name_en;
+    const fee = ful === "delivery" ? (pharmacy.delivery_fee_jod || 0) : 0;
+    document.getElementById("review-summary").innerHTML = `
+      <div class="review-row"><span class="label">${currentLang === "ar" ? "الصيدلية" : "Pharmacy"}</span><strong>${pharmName}</strong></div>
+      <div class="review-row"><span class="label">${currentLang === "ar" ? "الوصفة" : "Prescription"}</span><strong>${f?.name || "—"}</strong></div>
+      <div class="review-row"><span class="label">${currentLang === "ar" ? "طريقة الاستلام" : "Fulfillment"}</span><strong>${t(`client.${ful}`)}</strong></div>
+      ${ful === "delivery" ? `<div class="review-row"><span class="label">${t("client.address")}</span><strong>${addr}</strong></div>` : ""}
+      ${notes ? `<div class="review-row"><span class="label">${currentLang === "ar" ? "ملاحظات" : "Notes"}</span><strong>${notes}</strong></div>` : ""}
+      ${fee > 0 ? `<div class="review-row"><span class="label">${t("client.deliveryFee")}</span><strong>${fee} ${t("common.jod")}</strong></div>` : ""}
+      <p class="muted text-sm mt-4">${currentLang === "ar" ? "السعر النهائي يحدّده الصيدلي بعد فحص الوصفة." : "Final price is set by the pharmacy after reviewing your prescription."}</p>
+    `;
+  }
+
+  // Submit
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById("submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.querySelector("span").textContent = t("client.placing");
+    try {
+      const fd = new FormData(e.target);
+      const res = await api("/api/orders", { method: "POST", body: fd });
+      toast(t("client.orderPlaced"), "success");
+      setTimeout(() => location.href = `/client/order-detail?id=${res.id}`, 600);
+    } catch (err) {
+      toast(err.message, "error");
+      submitBtn.disabled = false;
+      submitBtn.querySelector("span").textContent = t("client.placeOrder");
+    }
+  });
+
+  init();
+</script>
+</body>
+</html>

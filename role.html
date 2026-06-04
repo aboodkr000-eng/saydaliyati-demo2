@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign up · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    .auth-header {
+      padding: 1.25rem; display: flex; align-items: center; justify-content: space-between;
+      max-width: 76rem; margin: 0 auto; width: 100%;
+    }
+    .auth-brand { display: flex; align-items: center; gap: 0.625rem; font-weight: 700; font-size: 1.0625rem; }
+    .auth-main {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 1rem 1.25rem 4rem;
+      position: relative; overflow: hidden;
+    }
+    .auth-main::before {
+      content: ""; position: absolute; top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 800px; height: 500px;
+      border-radius: 999px;
+      background: radial-gradient(circle, var(--mint) 0%, transparent 70%);
+      opacity: 0.13; filter: blur(120px);
+      pointer-events: none;
+    }
+    .role-shell { width: 100%; max-width: 32rem; position: relative; }
+    .role-shell h1 {
+      font-size: 2.25rem; font-weight: 700;
+      letter-spacing: -0.03em;
+      text-align: center;
+      margin: 0 0 0.5rem;
+    }
+    .role-sub {
+      color: var(--fg-muted); text-align: center;
+      margin: 0 0 2rem; font-size: 0.9375rem;
+    }
+    .role-card {
+      width: 100%;
+      display: flex; align-items: center; gap: 1.125rem;
+      padding: 1.5rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      cursor: pointer;
+      text-align: start;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      color: inherit; font-family: inherit;
+      position: relative; overflow: hidden;
+    }
+    .role-card + .role-card { margin-top: 0.875rem; }
+    .role-card:hover {
+      border-color: var(--mint);
+      transform: translateY(-3px);
+      box-shadow: var(--shadow);
+    }
+    .role-card-icon {
+      width: 3.5rem; height: 3.5rem;
+      border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .role-card-icon.client { background: var(--mint); color: #000; }
+    .role-card-icon.pharmacy { background: var(--blue-soft); color: var(--blue); }
+    .role-card h3 {
+      margin: 0 0 0.25rem;
+      font-size: 1.125rem; font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .role-card p {
+      margin: 0;
+      font-size: 0.875rem; color: var(--fg-muted);
+      line-height: 1.4;
+    }
+    .role-card-arrow {
+      color: var(--fg-subtle);
+      transition: color 0.15s, transform 0.15s;
+    }
+    .role-card:hover .role-card-arrow { color: var(--mint); transform: translateX(0.25rem); }
+    html[dir="rtl"] .role-card:hover .role-card-arrow { transform: translateX(-0.25rem) scaleX(-1); }
+    html[dir="rtl"] .role-card-arrow { transform: scaleX(-1); }
+
+    .role-foot {
+      text-align: center; margin-top: 1.5rem;
+      font-size: 0.875rem; color: var(--fg-muted);
+    }
+    .role-foot a { color: var(--mint); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div class="auth-header">
+  <a href="/" class="auth-brand">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="20" height="20" rx="6" fill="#00E5A8"/>
+      <path d="M12 7v10M7 12h10" stroke="#000" stroke-width="2.75" stroke-linecap="round"/>
+    </svg>
+    <span data-i18n="nav.app">صيدليتي</span>
+  </a>
+  <button class="lang-toggle" onclick="toggleLang()">EN</button>
+</div>
+
+<main class="auth-main">
+  <div class="role-shell">
+    <h1 data-i18n="role.title">مين أنت؟</h1>
+    <p class="role-sub" data-i18n="role.subtitle">اختر كيف بدّك تستخدم صيدليتي.</p>
+
+    <button class="role-card" onclick="choose('client')">
+      <div class="role-card-icon client">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="flex-1">
+        <h3 data-i18n="role.client">أنا مريض</h3>
+        <p data-i18n="role.clientDesc">اطلب أدويتك من أقرب الصيدليات.</p>
+      </div>
+      <div class="role-card-arrow">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </div>
+    </button>
+
+    <button class="role-card" onclick="choose('pharmacy')">
+      <div class="role-card-icon pharmacy">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
+      </div>
+      <div class="flex-1">
+        <h3 data-i18n="role.pharmacy">أنا صاحب صيدلية</h3>
+        <p data-i18n="role.pharmacyDesc">استقبل الطلبات وكبّر شغلك.</p>
+      </div>
+      <div class="role-card-arrow">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </div>
+    </button>
+
+    <div class="role-foot">
+      <span data-i18n="auth.haveAccount">لديك حساب؟</span>
+      <a href="/sign-in" data-i18n="auth.signIn">دخول</a>
+    </div>
+  </div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  function choose(role) {
+    sessionStorage.setItem("signup_role", role);
+    location.href = "/sign-up";
+  }
+</script>
+</body>
+</html>

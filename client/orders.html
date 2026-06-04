@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orders · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="client.myOrders">طلباتي</h1>
+  </header>
+
+  <div id="list">
+    <div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div>
+  </div>
+
+  <div id="empty" class="empty hidden">
+    <div class="empty-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    </div>
+    <h3 data-i18n="client.noOrders">ما عندك طلبات بعد</h3>
+    <p data-i18n="client.noOrdersDesc">طلباتك رح تظهر هون.</p>
+    <a href="/client/home" class="btn btn-primary mt-4" data-i18n="client.orderEmpty">تصفّح الصيدليات</a>
+  </div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script src="/sounds.js"></script>
+<script>
+  applyLang(currentLang);
+  let lastJson = "";
+  let knownStatusByOrderId = null;
+  let knownUnreadByOrderId = null;
+
+  function detectChangesAndChime(orders) {
+    if (!knownStatusByOrderId) return;
+    let chatChimed = false;
+    let statusChimed = false;
+    for (const o of orders) {
+      // Chat: a fresh unread message appeared (count went up)
+      const prevUnread = knownUnreadByOrderId.get(o.id) ?? 0;
+      if (!chatChimed && (o.unread_count || 0) > prevUnread) {
+        playChatSound();
+        chatChimed = true;
+      }
+      // Status: changed
+      const prevStatus = knownStatusByOrderId.get(o.id);
+      if (!statusChimed && prevStatus && prevStatus !== o.status) {
+        playNotificationSound();
+        statusChimed = true;
+      }
+    }
+  }
+
+  function rememberState(orders) {
+    knownStatusByOrderId = new Map(orders.map((o) => [o.id, o.status]));
+    knownUnreadByOrderId = new Map(orders.map((o) => [o.id, o.unread_count || 0]));
+  }
+
+  async function refresh() {
+    try {
+      const orders = await api("/api/orders");
+      const json = JSON.stringify(orders);
+      if (json === lastJson) return;
+      lastJson = json;
+      detectChangesAndChime(orders);
+      rememberState(orders);
+      render(orders);
+    } catch {}
+  }
+
+  async function init() {
+    const me = await requireAuth("client");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderClientNav("/client/orders");
+    document.getElementById("list").innerHTML = skeletonRows(3);
+    try {
+      const orders = await api("/api/orders");
+      lastJson = JSON.stringify(orders);
+      rememberState(orders);
+      render(orders);
+      startPolling(refresh, 6000);
+    } catch (err) { toast(err.message, "error"); }
+  }
+
+  function render(orders) {
+    const list = document.getElementById("list");
+    if (orders.length === 0) {
+      list.innerHTML = "";
+      document.getElementById("empty").classList.remove("hidden");
+      return;
+    }
+    list.innerHTML = orders.map((o) => {
+      const name = currentLang === "ar" ? o.pharmacy_name_ar : o.pharmacy_name_en;
+      const unread = o.unread_count || 0;
+      return `
+        <a href="/client/order-detail?id=${o.id}" class="order-row">
+          ${avatarHtml(name, "md")}
+          <div class="order-row-info">
+            <h3>${name}</h3>
+            <p>${formatRelative(o.created_at)} · ${o.fulfillment === "delivery" ? t("client.delivery") : t("client.pickup")}</p>
+          </div>
+          <div class="order-row-meta">
+            <div class="flex items-center gap-2 justify-center" style="justify-content:flex-end">
+              ${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ""}
+              ${statusPill(o.status)}
+            </div>
+            ${o.total_jod != null ? `<div class="total mt-1">${o.total_jod} ${t("common.jod")}</div>` : ""}
+          </div>
+        </a>
+      `;
+    }).join("");
+  }
+
+  init();
+</script>
+</body>
+</html>

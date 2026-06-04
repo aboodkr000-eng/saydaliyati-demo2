@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Users · Admin · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="admin.users">المستخدمين</h1>
+    <p class="page-subtitle" id="count"></p>
+  </header>
+
+  <div class="search-bar mb-4">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="search" class="input" placeholder="Search by name, email, phone…" />
+  </div>
+
+  <div class="admin-table-wrap admin-table-scroll" id="wrap">
+    <div class="skeleton" style="height:20rem"></div>
+  </div>
+</main>
+
+<!-- Edit modal -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal" style="max-width:30rem">
+    <h3 data-i18n="admin.editUser">تعديل المستخدم</h3>
+    <form id="edit-form" class="stack-md mt-4">
+      <input type="hidden" name="id" />
+      <div class="field">
+        <label class="label" data-i18n="admin.name">الاسم</label>
+        <input class="input" name="full_name" />
+      </div>
+      <div class="field">
+        <label class="label" data-i18n="admin.phone">الهاتف</label>
+        <input class="input" name="phone" dir="ltr" />
+      </div>
+      <div class="field">
+        <label class="label" data-i18n="admin.role">الدور</label>
+        <select class="select input" name="role">
+          <option value="client">client</option>
+          <option value="pharmacy">pharmacy</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" data-i18n="admin.newPassword">كلمة مرور جديدة (اختياري)</label>
+        <input class="input" name="password" type="password" minlength="8" />
+        <span class="field-hint" data-i18n="admin.newPasswordHint">اتركها فارغة عشان تبقى نفسها.</span>
+      </div>
+      <div class="flex gap-3 mt-4">
+        <button type="button" class="btn btn-secondary flex-1" onclick="closeModal()" data-i18n="common.cancel">إلغاء</button>
+        <button type="submit" class="btn btn-primary flex-1" data-i18n="common.save">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  let users = [];
+  let lastJson = "";
+
+  async function refresh() {
+    try {
+      const fresh = await api("/api/admin/users");
+      const json = JSON.stringify(fresh);
+      if (json === lastJson) return;
+      lastJson = json;
+      users = fresh;
+      apply();
+    } catch {}
+  }
+
+  function apply() {
+    const q = document.getElementById("search").value.toLowerCase().trim();
+    const filtered = users.filter((u) =>
+      !q || u.full_name?.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").includes(q)
+    );
+    document.getElementById("count").textContent = `${filtered.length} / ${users.length}`;
+
+    if (filtered.length === 0) {
+      document.getElementById("wrap").innerHTML = `<div class="empty"><p>${t("admin.noResults")}</p></div>`;
+      return;
+    }
+
+    const roleColors = { client: "mint", pharmacy: "blue", admin: "purple" };
+    document.getElementById("wrap").innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>${t("admin.name")}</th>
+            <th>${t("admin.email")}</th>
+            <th>${t("admin.role")}</th>
+            <th>${t("admin.phone")}</th>
+            <th>${t("admin.created")}</th>
+            <th style="text-align:end">${t("admin.actions")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((u) => `
+            <tr>
+              <td>
+                <div class="flex items-center gap-3">
+                  ${avatarHtml(u.full_name || u.email, "sm")}
+                  <span class="font-semibold truncate-md">${u.full_name || "—"}</span>
+                </div>
+              </td>
+              <td><span class="muted truncate-md" dir="ltr">${u.email}</span></td>
+              <td><span class="pill pill-${roleColors[u.role]} pill-no-dot">${u.role}</span></td>
+              <td><span dir="ltr" class="muted">${formatPhone(u.phone) || "—"}</span></td>
+              <td><span class="muted text-xs">${formatDate(u.created_at)}</span></td>
+              <td>
+                <div class="row-actions">
+                  <button class="icon-mini" onclick="editUser('${u.id}')" title="Edit">${iconPencil(14)}</button>
+                  <button class="icon-mini danger" onclick="deleteUser('${u.id}','${(u.full_name || u.email).replace(/'/g, "\\'")}')" title="Delete">${iconTrash(14)}</button>
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function editUser(id) {
+    const u = users.find((x) => x.id === id);
+    if (!u) return;
+    const form = document.getElementById("edit-form");
+    form.elements.id.value = u.id;
+    form.elements.full_name.value = u.full_name || "";
+    form.elements.phone.value = u.phone || "";
+    form.elements.role.value = u.role;
+    form.elements.password.value = "";
+    document.getElementById("edit-modal").classList.add("show");
+  }
+  window.editUser = editUser;
+
+  async function deleteUser(id, label) {
+    if (!confirm(t("admin.confirmDeleteUser") + `\n\n${label}`)) return;
+    try {
+      await api(`/api/admin/users/${id}`, { method: "DELETE" });
+      toast("Deleted", "success");
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  }
+  window.deleteUser = deleteUser;
+
+  function closeModal() { document.getElementById("edit-modal").classList.remove("show"); }
+  window.closeModal = closeModal;
+  document.getElementById("edit-modal").addEventListener("click", (e) => { if (e.target.id === "edit-modal") closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  document.getElementById("edit-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const id = data.id;
+    delete data.id;
+    if (!data.password) delete data.password;
+    try {
+      await api(`/api/admin/users/${id}`, { method: "PATCH", body: data });
+      closeModal();
+      toast(t("common.saved"), "success");
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  document.getElementById("search").addEventListener("input", apply);
+
+  (async () => {
+    const me = await requireAuth("admin");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderAdminNav("/admin/users");
+    await refresh();
+    startPolling(refresh, 8000);
+  })();
+</script>
+</body>
+</html>

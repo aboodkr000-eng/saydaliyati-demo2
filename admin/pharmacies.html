@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pharmacies · Admin · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <h1 class="page-title" data-i18n="admin.pharmacies">الصيدليات</h1>
+    <p class="page-subtitle" id="count"></p>
+  </header>
+
+  <div class="search-bar mb-4">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="search" class="input" placeholder="Search by name, area, owner…" />
+  </div>
+
+  <div class="admin-table-wrap admin-table-scroll" id="wrap">
+    <div class="skeleton" style="height:20rem"></div>
+  </div>
+</main>
+
+<!-- Edit modal -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal" style="max-width:32rem">
+    <h3 data-i18n="admin.editPharmacy">تعديل الصيدلية</h3>
+    <form id="edit-form" class="stack-md mt-4">
+      <input type="hidden" name="id" />
+      <div class="field">
+        <label class="label">English name</label>
+        <input class="input" name="name_en" />
+      </div>
+      <div class="field">
+        <label class="label">Arabic name</label>
+        <input class="input" name="name_ar" />
+      </div>
+      <div class="field">
+        <label class="label" data-i18n="admin.area">المنطقة</label>
+        <input class="input" name="area" />
+      </div>
+      <div class="field">
+        <label class="label" data-i18n="admin.phone">الهاتف</label>
+        <input class="input" name="phone" dir="ltr" />
+      </div>
+      <div class="switch" id="verified-switch">
+        <div class="switch-text"><div class="switch-label-text" data-i18n="admin.verifiedQ">موثّق؟</div></div>
+        <div class="switch-track"></div>
+      </div>
+      <input type="hidden" name="is_verified" value="0" />
+      <div class="flex gap-3 mt-4">
+        <button type="button" class="btn btn-secondary flex-1" onclick="closeModal()" data-i18n="common.cancel">إلغاء</button>
+        <button type="submit" class="btn btn-primary flex-1" data-i18n="common.save">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  let pharmacies = [];
+  let lastJson = "";
+
+  async function refresh() {
+    try {
+      const fresh = await api("/api/admin/pharmacies");
+      const json = JSON.stringify(fresh);
+      if (json === lastJson) return;
+      lastJson = json;
+      pharmacies = fresh;
+      apply();
+    } catch {}
+  }
+
+  function apply() {
+    const q = document.getElementById("search").value.toLowerCase().trim();
+    const filtered = pharmacies.filter((p) =>
+      !q || p.name_en.toLowerCase().includes(q) || p.name_ar.includes(document.getElementById("search").value)
+        || (p.area || "").toLowerCase().includes(q) || (p.owner_email || "").includes(q)
+    );
+    document.getElementById("count").textContent = `${filtered.length} / ${pharmacies.length}`;
+
+    if (filtered.length === 0) {
+      document.getElementById("wrap").innerHTML = `<div class="empty"><p>${t("admin.noResults")}</p></div>`;
+      return;
+    }
+
+    document.getElementById("wrap").innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>${t("admin.name")}</th>
+            <th>${t("admin.area")}</th>
+            <th>${t("admin.owner")}</th>
+            <th>Orders</th>
+            <th>Rating</th>
+            <th>${t("admin.verifiedQ")}</th>
+            <th style="text-align:end">${t("admin.actions")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((p) => `
+            <tr>
+              <td>
+                <div class="flex items-center gap-3">
+                  ${avatarHtml(p.name_en, "sm")}
+                  <div style="min-width:0">
+                    <div class="font-semibold truncate-md">${p.name_en}</div>
+                    <div class="muted text-xs truncate-md">${p.name_ar}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="muted">${p.area || "—"}</span></td>
+              <td><span class="muted text-xs truncate-md" dir="ltr">${p.owner_email || "—"}</span></td>
+              <td>${p.orders_count || 0}</td>
+              <td>${(p.rating || 0).toFixed(1)} ⭐</td>
+              <td>
+                <button class="pill ${p.is_verified ? "pill-mint" : "pill-muted"} pill-no-dot" style="cursor:pointer;border:0" onclick="toggleVerified('${p.id}', ${p.is_verified ? 0 : 1})">
+                  ${p.is_verified ? t("admin.verified") : "—"}
+                </button>
+              </td>
+              <td>
+                <div class="row-actions">
+                  <button class="icon-mini" onclick="editPharmacy('${p.id}')" title="Edit">${iconPencil(14)}</button>
+                  <button class="icon-mini danger" onclick="deletePharmacy('${p.id}','${p.name_en.replace(/'/g, "\\'")}')" title="Delete">${iconTrash(14)}</button>
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  async function toggleVerified(id, value) {
+    try {
+      await api(`/api/admin/pharmacies/${id}`, { method: "PATCH", body: { is_verified: value } });
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  }
+  window.toggleVerified = toggleVerified;
+
+  function editPharmacy(id) {
+    const p = pharmacies.find((x) => x.id === id);
+    if (!p) return;
+    const form = document.getElementById("edit-form");
+    form.elements.id.value = p.id;
+    form.elements.name_en.value = p.name_en || "";
+    form.elements.name_ar.value = p.name_ar || "";
+    form.elements.area.value = p.area || "";
+    form.elements.phone.value = p.phone || "";
+    const sw = document.getElementById("verified-switch");
+    sw.classList.toggle("on", !!p.is_verified);
+    form.elements.is_verified.value = p.is_verified ? "1" : "0";
+    document.getElementById("edit-modal").classList.add("show");
+  }
+  window.editPharmacy = editPharmacy;
+
+  async function deletePharmacy(id, label) {
+    if (!confirm(t("admin.confirmDeletePharmacy") + `\n\n${label}`)) return;
+    try {
+      await api(`/api/admin/pharmacies/${id}`, { method: "DELETE" });
+      toast("Deleted", "success");
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  }
+  window.deletePharmacy = deletePharmacy;
+
+  document.getElementById("verified-switch").addEventListener("click", (e) => {
+    const sw = e.currentTarget;
+    sw.classList.toggle("on");
+    document.querySelector('input[name="is_verified"]').value = sw.classList.contains("on") ? "1" : "0";
+  });
+
+  function closeModal() { document.getElementById("edit-modal").classList.remove("show"); }
+  window.closeModal = closeModal;
+  document.getElementById("edit-modal").addEventListener("click", (e) => { if (e.target.id === "edit-modal") closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  document.getElementById("edit-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const id = data.id;
+    delete data.id;
+    data.is_verified = data.is_verified === "1" ? 1 : 0;
+    try {
+      await api(`/api/admin/pharmacies/${id}`, { method: "PATCH", body: data });
+      closeModal();
+      toast(t("common.saved"), "success");
+      await refresh();
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  document.getElementById("search").addEventListener("input", apply);
+
+  (async () => {
+    const me = await requireAuth("admin");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderAdminNav("/admin/pharmacies");
+    await refresh();
+    startPolling(refresh, 8000);
+  })();
+</script>
+</body>
+</html>

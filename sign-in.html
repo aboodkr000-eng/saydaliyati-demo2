@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    .auth-header {
+      padding: 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 76rem; margin: 0 auto; width: 100%;
+    }
+    .auth-brand { display: flex; align-items: center; gap: 0.625rem; font-weight: 700; font-size: 1.0625rem; }
+    .auth-main {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 1rem 1.25rem 4rem;
+      position: relative; overflow: hidden;
+    }
+    .auth-main::before {
+      content: ""; position: absolute; top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 800px; height: 500px;
+      border-radius: 999px;
+      background: radial-gradient(circle, var(--mint) 0%, transparent 70%);
+      opacity: 0.13; filter: blur(120px);
+      pointer-events: none;
+    }
+    .auth-card {
+      position: relative; width: 100%; max-width: 26rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 2rem;
+      box-shadow: var(--shadow);
+    }
+    .auth-card h1 {
+      font-size: 1.75rem; font-weight: 700;
+      letter-spacing: -0.025em;
+      margin: 0 0 0.5rem;
+    }
+    .auth-card .auth-sub {
+      color: var(--fg-muted);
+      font-size: 0.9375rem; margin: 0 0 1.75rem;
+    }
+    .auth-foot {
+      text-align: center; margin-top: 1.5rem;
+      font-size: 0.875rem; color: var(--fg-muted);
+    }
+    .auth-foot a { color: var(--mint); font-weight: 600; }
+    .auth-foot a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<div class="auth-header">
+  <a href="/" class="auth-brand">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="20" height="20" rx="6" fill="#00E5A8"/>
+      <path d="M12 7v10M7 12h10" stroke="#000" stroke-width="2.75" stroke-linecap="round"/>
+    </svg>
+    <span data-i18n="nav.app">صيدليتي</span>
+  </a>
+  <button class="lang-toggle" onclick="toggleLang()">EN</button>
+</div>
+
+<main class="auth-main">
+  <div class="auth-card">
+    <h1 data-i18n="auth.welcomeBack">أهلاً بعودتك</h1>
+    <p class="auth-sub" data-i18n="auth.welcomeBackSub">سجّل الدخول للمتابعة.</p>
+
+    <form id="form" class="stack-md">
+        <div class="field">
+             <label class="label" data-i18n="auth.email">البريد الإلكتروني</label> 
+            <input class="input" name="email" type="email" required dir="ltr"
+                   data-i18n-placeholder="auth.emailPlaceholder" placeholder="you@example.com" />
+        </div>
+      <div class="field">
+        <label class="label" data-i18n="auth.password">كلمة المرور</label>
+        <input class="input" name="password" type="password" required minlength="8"
+               data-i18n-placeholder="auth.passwordPlaceholder" placeholder="At least 8 characters" />
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg btn-block" id="submit-btn">
+        <span data-i18n="auth.signIn">ادخل</span>
+      </button>
+    </form>
+
+    <div class="auth-foot">
+      <span data-i18n="auth.noAccount">جديد على صيدليتي؟</span>
+      <a href="/role" data-i18n="auth.signUp">أنشئ حساباً</a>
+    </div>
+  </div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+  applyLang(currentLang);
+  const form = document.getElementById("form");
+  const btn = document.getElementById("submit-btn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.querySelector("span").textContent = t("auth.signingIn");
+    const data = Object.fromEntries(new FormData(form));
+    try {
+      const result = await api("/api/auth/sign-in", { method: "POST", body: data });
+      location.href = result.role === "admin" ? "/admin/dashboard"
+                    : result.role === "pharmacy" ? "/pharmacy/dashboard"
+                    : "/client/home";
+    } catch (err) {
+      toast(err.message || t("auth.errorInvalid"), "error");
+      btn.disabled = false;
+      btn.querySelector("span").textContent = t("auth.signIn");
+    }
+  });
+</script>
+</body>
+</html>

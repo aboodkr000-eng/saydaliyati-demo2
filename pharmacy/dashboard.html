@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard · صيدليتي</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="nav-mount"></div>
+
+<main class="container">
+  <header class="page-header">
+    <p class="muted text-sm" id="welcome" style="margin:0 0 0.25rem"></p>
+    <h1 class="page-title" data-i18n="pharmacy.dashboardTitle">لوحة التحكم</h1>
+  </header>
+
+  <!-- Stat cards -->
+  <div class="grid grid-4 mb-8" id="stats">
+    <div class="skeleton" style="height:8rem"></div><div class="skeleton" style="height:8rem"></div><div class="skeleton" style="height:8rem"></div><div class="skeleton" style="height:8rem"></div>
+  </div>
+
+  <!-- Recent orders -->
+  <div class="section-header">
+    <h2 data-i18n="pharmacy.recentOrders">الطلبات الأخيرة</h2>
+    <a href="/pharmacy/orders" data-i18n="pharmacy.viewAll">عرض الكل</a>
+  </div>
+  <div id="recent"><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div><div class="skeleton" style="height:5rem;margin-bottom:0.625rem"></div></div>
+  <div id="empty" class="empty hidden">
+    <div class="empty-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    </div>
+    <h3 data-i18n="pharmacy.noOrdersYet">ما في طلبات بعد — رح تظهر هون.</h3>
+  </div>
+</main>
+
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script src="/sounds.js"></script>
+<script>
+  applyLang(currentLang);
+  let lastJson = "";
+  let knownOrderIds = null;
+  let knownStatusByOrderId = new Map();
+  let knownUnreadByOrderId = new Map();
+
+  async function loadDashboardData() {
+    const [stats, allOrders] = await Promise.all([
+      api("/api/pharmacies/owner/stats"),
+      api("/api/orders"),
+    ]);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    stats.today_count = allOrders.filter((o) => o.created_at >= startOfToday.getTime()).length;
+    stats.today_revenue = allOrders
+      .filter((o) => o.status === "completed" && o.created_at >= startOfToday.getTime())
+      .reduce((s, o) => s + (o.total_jod || 0), 0);
+    return { stats, allOrders };
+  }
+
+  function detectChangesAndChime(allOrders) {
+    if (!knownOrderIds) return;
+    let chatChimed = false;
+    let statusChimed = false;
+    for (const o of allOrders) {
+      const prevUnread = knownUnreadByOrderId.get(o.id) ?? 0;
+      if (!chatChimed && (o.unread_count || 0) > prevUnread) {
+        playChatSound();
+        chatChimed = true;
+      }
+      const wasKnown = knownOrderIds.has(o.id);
+      const prevStatus = knownStatusByOrderId.get(o.id);
+      if (!statusChimed && (!wasKnown || (prevStatus && prevStatus !== o.status))) {
+        playNotificationSound();
+        statusChimed = true;
+      }
+    }
+  }
+
+  function rememberState(allOrders) {
+    knownOrderIds = new Set(allOrders.map((o) => o.id));
+    knownStatusByOrderId = new Map(allOrders.map((o) => [o.id, o.status]));
+    knownUnreadByOrderId = new Map(allOrders.map((o) => [o.id, o.unread_count || 0]));
+  }
+
+  async function refresh() {
+    try {
+      const { stats, allOrders } = await loadDashboardData();
+      const json = JSON.stringify({ stats, count: allOrders.length, statuses: allOrders.map((o) => o.status).join() });
+      if (json === lastJson) return;
+      lastJson = json;
+      detectChangesAndChime(allOrders);
+      rememberState(allOrders);
+      renderStats(stats);
+      renderRecent(allOrders);
+    } catch {}
+  }
+
+  (async () => {
+    const me = await requireAuth("pharmacy");
+    if (!me) return;
+    document.getElementById("nav-mount").innerHTML = renderPharmacyNav("/pharmacy/dashboard");
+    document.getElementById("welcome").textContent = `${t("pharmacy.welcome")}, ${me.full_name?.split(" ")[0] || ""} 👋`;
+    document.getElementById("stats").innerHTML = skeletonRows(4, "8rem");
+
+    try {
+      const { stats, allOrders } = await loadDashboardData();
+      lastJson = JSON.stringify({ stats, count: allOrders.length, statuses: allOrders.map((o) => o.status).join() });
+      rememberState(allOrders); // initial — no chime
+      renderStats(stats);
+      renderRecent(allOrders);
+      startPolling(refresh, 8000);
+    } catch (err) { toast(err.message, "error"); }
+  })();
+
+  function renderStats(d) {
+    document.getElementById("stats").innerHTML = `
+      ${statCard("amber", iconClock(20), t("pharmacy.pendingOrders"), d.pending_count || 0)}
+      ${statCard("blue", iconBike(20), t("pharmacy.activeOrders"), d.active_count || 0)}
+      ${statCard("mint", svg('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>', { size: 20 }), t("pharmacy.todayOrders"), d.today_count || 0)}
+      ${statCard("green", svg('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', { size: 20 }), t("pharmacy.totalRevenue"), `${(d.today_revenue || 0).toFixed(2)} ${t("common.jod")}`)}
+    `;
+  }
+
+  function statCard(color, icon, label, value) {
+    return `
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background: var(--${color}-soft); color: var(--${color})">${icon}</div>
+        <div class="stat-card-label">${label}</div>
+        <div class="stat-card-value">${value}</div>
+      </div>
+    `;
+  }
+
+  function renderRecent(orders) {
+    const list = document.getElementById("recent");
+    if (orders.length === 0) {
+      list.innerHTML = "";
+      document.getElementById("empty").classList.remove("hidden");
+      return;
+    }
+    list.innerHTML = orders.slice(0, 5).map((o) => {
+      const unread = o.unread_count || 0;
+      return `
+      <a href="/pharmacy/order-detail?id=${o.id}" class="order-row">
+        ${avatarHtml(o.client_name || "•", "md")}
+        <div class="order-row-info">
+          <h3>${o.client_name}</h3>
+          <p>${formatRelative(o.created_at)} · ${o.fulfillment === "delivery" ? t("client.delivery") : t("client.pickup")}</p>
+        </div>
+        <div class="order-row-meta">
+          <div class="flex items-center gap-2" style="justify-content:flex-end">
+            ${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ""}
+            ${statusPill(o.status)}
+          </div>
+          ${o.total_jod != null ? `<div class="total mt-1">${o.total_jod} ${t("common.jod")}</div>` : ""}
+        </div>
+      </a>
+    `;
+    }).join("");
+  }
+</script>
+</body>
+</html>
